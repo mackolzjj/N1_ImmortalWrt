@@ -69,10 +69,10 @@ jobs:
         with:
           path: /workdir/.ccache
           # key 带 run_id：actions/cache 不覆盖同名 key，固定 key 会让缓存永不更新
-          key: ccache-immortalwrt-${{ github.ref }}-${{ github.run_id }}
+          key: ccache-n1-immortalwrt-${{ github.ref }}-${{ github.run_id }}
           restore-keys: |
-            ccache-immortalwrt-${{ github.ref }}-
-            ccache-immortalwrt-
+            ccache-n1-immortalwrt-${{ github.ref }}-
+            ccache-n1-immortalwrt-
 
       - name: Clone source code
         working-directory: /workdir
