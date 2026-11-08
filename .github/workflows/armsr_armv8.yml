@@ -124,7 +124,7 @@ jobs:
           export PATH="$HOME/.cargo/bin:$PATH"
           ccache -M 5G
           ccache -z
-          make -j$(( $(nproc) + 1 )) || make -j$((nproc)) V=s
+          make -j$(( $(nproc) + 1 )) || make -j1 V=s
           ccache -s
 
       - name: Package N1 firmware
