@@ -85,6 +85,30 @@ jobs:
           ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
           echo "FILE_DATE=$(date +"%Y%m%d")" >> $GITHUB_ENV
 
+      # 缓存源码包下载目录：dl/ 里的 tarball 基本不变，跨构建直接复用，
+      # 省掉 make download 每次重新拉取几百个包
+      - name: Restore download cache
+        uses: actions/cache@v6
+        with:
+          path: /workdir/openwrt/dl
+          key: dl-n1-immortalwrt-${{ github.ref }}-${{ github.run_id }}
+          restore-keys: |
+            dl-n1-immortalwrt-${{ github.ref }}-
+            dl-n1-immortalwrt-
+
+      # 缓存 Rust crate 索引与源码：honk 是 Rust 程序，避免每次重新拉 crates.io
+      # 只缓存 registry/git，不缓存 ~/.cargo/bin（bpf-linker 由下一步单独下载）
+      - name: Restore cargo cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-n1-immortalwrt-${{ github.ref }}-${{ github.run_id }}
+          restore-keys: |
+            cargo-n1-immortalwrt-${{ github.ref }}-
+            cargo-n1-immortalwrt-
+
       - name: Update & Install feeds
         working-directory: ./openwrt
         run: |
@@ -124,7 +148,8 @@ jobs:
           export PATH="$HOME/.cargo/bin:$PATH"
           ccache -M 5G
           ccache -z
-          make -j$(( $(nproc) + 1 )) || make -j1 V=s
+          # 失败时用「并行 + 详细日志」重试，不再退到单线程 -j1 全量重编
+          make -j$(( $(nproc) + 1 )) || make -j$(( $(nproc) )) V=s
           ccache -s
 
       - name: Package N1 firmware
