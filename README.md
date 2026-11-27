@@ -85,7 +85,7 @@ armsr/armv8/N1/.config                 内置包与内核选项
 armsr/armv8/N1/files/                  预置 /etc/config、sysctl、uci-defaults、crontabs
 ```
 
-推送到 `main` 会触发构建（每月 1 / 16 日也有定时构建），产物发到 Releases；只改文档不想编译时，在 commit body 写 `[skip ci]`。
+推送到 `main` 会触发构建（另有每 6 天一次的定时构建），产物发到 Releases；只改文档不想编译时，在 commit body 写 `[skip ci]`。
 
 ## 致谢
 
