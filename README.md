@@ -52,7 +52,7 @@ apk list --installed | grep -E 'honk|daeuniverse|podman'
 | --- | --- |
 | 源码 | `immortalwrt/immortalwrt` @ `v25.12.2` → `armsr/armv8` |
 | 内核 | **自编译** [`mackolzjj/ophub-kernel-ftrace`](https://github.com/mackolzjj/ophub-kernel-ftrace) 的 `kernel_stable` `6.18.y` + `auto_kernel: true`（已开启 `FUNCTION_TRACER` / `DYNAMIC_FTRACE`） |
-| 打包 | `ophub/amlogic-s9xxx-openwrt` · `s905d` · `256/1024` · builder `Mackol` |
+| 打包 | `ophub/amlogic-s9xxx-openwrt` · `s905d` · `256/4096` · builder `Mackol` |
 | 触发 | push `main` / `master`、手动、每月 1 / 16 日 08:00（北京时间） |
 | Release | `ImmortalWrt_<分支>_<YYYYMMDD>`，同日 `--clobber` 覆盖，仅留最近 10 个 |
 
@@ -65,11 +65,12 @@ apk list --installed | grep -E 'honk|daeuniverse|podman'
 | --- | --- |
 | 源码处理 | checkout `v25.12.2` 后把 `25.12-SNAPSHOT` 改为 `25.12.2` |
 | 构建机 | `ubuntu-24.04`，`TZ=Asia/Shanghai`；77 个 apt 编译依赖已固化在 workflow 内，不再外部拉取 |
-| Rust / eBPF | rustup `1.99.1` + `nightly-2026-10-20` + `bpfel-unknown-none` + `bpf-linker` v0.13.0（honk 编译必需） |
+| Rust / eBPF | 工具链版本从 honk 源码的 `rust-toolchain.toml` / `crates/honk-ebpf/rust-toolchain.toml` 读出，`bpf-linker` 版本与 sha256 取上游 `.github/ci/pins.env`（都在 `diy.sh` 里，不写死） |
 | `diy.sh` | clone `daeuniverse/openwrt-packages`、`ophub/luci-app-amlogic`、`Zerogiven-OpenWRT-Packages/luci-app-podman`；移除 `luci-app-dae` / `luci-app-daed` / `luci-app-passwall` / `dae` 与 `luci-app-attendedsysupgrade`；安装 Rust |
 | 默认网络 | `eth0` 静态 `192.168.2.2/24`，网关 `192.168.2.1`，仅 `lan` 无 wan |
 | 不集成 | `ppp` / `kmod-ppp` / `kmod-mppe`（无 PPPoE）、`wpad` / `hostapd`（无 WiFi）、`luci-app-samba4` |
 | 产物名 | `openwrt_amlogic_s905d_k6.18.*_<日期>.img.gz`（ophub 生成，与 Release 名不同） |
+| 产物校验 | 编译后断言 `CONFIG_PACKAGE_honk=y`、`packages/honk_*`、`rootfs` 里的 `/usr/bin/honk-core` 都在，缺一即失败（避免发出没有 honk 的固件） |
 
 ### 晶晨宝盒在线更新
 

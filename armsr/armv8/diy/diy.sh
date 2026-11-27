@@ -39,29 +39,77 @@ HONK_TAG=$(git ls-remote --tags --sort="-v:refname" https://github.com/daeuniver
   | sed 's#.*/##' | head -1)
 echo "本次编译 honk 版本: ${HONK_TAG}"
 git clone --recurse-submodules -b "${HONK_TAG}" --depth=1 https://github.com/daeuniverse/honk feeds/packages/net/honk/src
-# 同步 Makefile 的 PKG_VERSION，让 opkg 显示的版本号与实际一致（仅匹配标准格式，不匹配则跳过）
-sed -i -E "s/^(PKG_VERSION[ :]*=)[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$/\1${HONK_TAG#v}/" feeds/packages/net/honk/Makefile
+# 版本号走上游 Makefile 自己的接口：
+#   PKG_VERSION:=$(if $(HONK_VERSION),$(HONK_VERSION),0.1.0_beta7)
+#   HONK_GIT_TAG:=$(if $(HONK_GIT_TAG),$(HONK_GIT_TAG),v0.1.0-beta.7)
+# 旧写法（裸 PKG_VERSION:=x.y.z 的 sed）在新版 Makefile 上匹配不到、静默 no-op，
+# 结果是 opkg 显示的版本、build.sh 嵌进二进制的 tag 与真正 clone 的 tag 脱钩。
+# make 继承环境变量，所以直接导出；apk 把 beta 写成 0.1.0_beta7。
+grep -q 'if \$(HONK_VERSION)' feeds/packages/net/honk/Makefile \
+    || { echo "honk Makefile 已不支持 HONK_VERSION，需改回 sed 同步版本号"; exit 1; }
+HONK_VER=$(printf '%s' "${HONK_TAG#v}" | sed -E 's/-(alpha|beta|rc)\.([0-9]+)$/_\1\2/')
+export HONK_VERSION="$HONK_VER"
+export HONK_GIT_TAG="$HONK_TAG"
+echo "honk 版本号: PKG_VERSION=${HONK_VERSION} tag=${HONK_GIT_TAG}"
+if [ -n "${GITHUB_ENV:-}" ]; then
+    printf 'HONK_VERSION=%s\nHONK_GIT_TAG=%s\n' "$HONK_VERSION" "$HONK_GIT_TAG" >> "$GITHUB_ENV"
+fi
 
 # ---------------------------------------------------------------------------
-# honk needs rustup with its pinned toolchains. The OpenWrt-bundled rust
-# (1.96.0) is too old for aya-build@0.2.1 (needs >=1.98), and without rustup
-# the rust-toolchain.toml pins (1.99.1 / nightly-2026-10-20) are ignored.
+# honk 的工具链和 bpf-linker 一律从 clone 下来的源码里读，绝不写死版本号：
+# 上游 rust-toolchain.toml 会升级（1.99 -> 1.100 …）。写死会让
+# `rustup target add aarch64-unknown-linux-musl --toolchain <旧版>` 加到错的
+# 工具链上，而 build.sh 实际用的是 toml 里那个（rustup 现场自动装、minimal
+# profile 不带 musl std），编译期就报 `can't find crate for std`。
 export RUSTUP_HOME="$HOME/.rustup"
 export CARGO_HOME="$HOME/.cargo"
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.99.1 --profile minimal
+
+HONK_SRC_DIR="feeds/packages/net/honk/src"
+TC=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' "$HONK_SRC_DIR/rust-toolchain.toml" | head -1)
+[ -n "$TC" ] || { echo "无法从 $HONK_SRC_DIR/rust-toolchain.toml 读出 channel"; exit 1; }
+NIGHTLY=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' "$HONK_SRC_DIR/crates/honk-ebpf/rust-toolchain.toml" | head -1)
+echo "honk 工具链: stable=${TC} ebpf=${NIGHTLY:-未声明}"
+
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain "$TC" --profile minimal
 . "$CARGO_HOME/env"
-# 1.99.1 已由 rustup-init 装好，这里只补组件（与下方 nightly 同一写法）
-rustup component add rustfmt clippy --toolchain 1.99.1
-rustup toolchain install nightly-2026-10-20 --profile minimal
-rustup component add rust-src llvm-tools --toolchain nightly-2026-10-20
-# bpfel-unknown-none 无预编译 std，honk 用 rust-src + -Z build-std 现编，无需 target add
-rustup target add aarch64-unknown-linux-musl --toolchain 1.99.1
+rustup component add rustfmt clippy --toolchain "$TC"
+# honk-core 交叉编译到 aarch64 musl，必须给 toml 里那个工具链装 std
+rustup target add aarch64-unknown-linux-musl --toolchain "$TC"
+
+# eBPF 侧的 nightly：bpfel-unknown-none 无预编译 std，honk 用 rust-src + -Z build-std 现编，无需 target add
+if [ -n "$NIGHTLY" ]; then
+    rustup toolchain install "$NIGHTLY" --profile minimal
+    rustup component add rust-src llvm-tools --toolchain "$NIGHTLY"
+fi
+
+# bpf-linker 的版本与 sha256 由上游 pins.env 决定。自己拍版本（与 aya-build
+# 期望的不一致）会在 eBPF link 阶段失败，所以照抄上游的 pin 并校验。
+PINS="$HONK_SRC_DIR/.github/ci/pins.env"
+[ -f "$PINS" ] || { echo "缺少 $PINS，无法确定 bpf-linker 版本"; exit 1; }
+. "$PINS"
+[ -n "${BPF_LINKER_VERSION:-}" ] && [ -n "${BPF_LINKER_SHA256:-}" ] \
+    || { echo "$PINS 里没有 BPF_LINKER_VERSION / BPF_LINKER_SHA256"; exit 1; }
+echo "bpf-linker: ${BPF_LINKER_VERSION}"
+command -v zstd >/dev/null 2>&1 || { echo "缺少 zstd，无法解包 bpf-linker（workflow 的 apt 清单里应有 zstd）"; exit 1; }
+mkdir -p "$CARGO_HOME/bin"
+curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 \
+    "https://github.com/aya-rs/bpf-linker/releases/download/v${BPF_LINKER_VERSION}/bpf-linker-x86_64-unknown-linux-musl.tar.zst" \
+    -o "$CARGO_HOME/bpf-linker.tar.zst"
+echo "${BPF_LINKER_SHA256}  $CARGO_HOME/bpf-linker.tar.zst" | sha256sum -c -
+zstd -dc "$CARGO_HOME/bpf-linker.tar.zst" | tar -xf - -C "$CARGO_HOME/bin"
+rm -f "$CARGO_HOME/bpf-linker.tar.zst"
+chmod +x "$CARGO_HOME/bin/bpf-linker"
+"$CARGO_HOME/bin/bpf-linker" --version
 # make honk's build.sh prefer rustup's cargo over OpenWrt's bundled rust.
 # Insert right after the shebang so it always runs first, regardless of
 # whether build.sh uses 'set -eu' / 'set -e' / 'set -uo pipefail'.
 sed -i '1a export PATH="$HOME/.cargo/bin:$PATH"' feeds/packages/net/honk/build.sh
 # also export for the surrounding Makefile context (defensive)
-export PATH="$HOME/.cargo/bin:$PATH"
+export PATH="$CARGO_HOME/bin:$PATH"
+# 后续 step（make）需要同一个 PATH，diy.sh 里的 export 不会跨 step 生效
+if [ -n "${GITHUB_ENV:-}" ]; then
+    echo "PATH=$CARGO_HOME/bin:$PATH" >> "$GITHUB_ENV"
+fi
 
 sed -i '/luci-app-attendedsysupgrade/d' feeds/luci/collections/luci/Makefile
 

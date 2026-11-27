@@ -129,19 +129,6 @@ jobs:
           make defconfig
           make download -j$(( $(nproc) * 2 ))
 
-      - name: 安装 bpf-linker（honk 编译必需）
-        run: |
-          command -v zstd >/dev/null 2>&1 || sudo apt-get -qq install -y zstd
-          mkdir -p "$HOME/.cargo/bin"
-          curl -fsSL --retry 3 \
-            "https://github.com/aya-rs/bpf-linker/releases/download/v0.13.0/bpf-linker-x86_64-unknown-linux-musl.tar.zst" \
-            -o "$HOME/bpf-linker.tar.zst"
-          tar --zstd -xf "$HOME/bpf-linker.tar.zst" -C "$HOME/.cargo/bin"
-          rm -f "$HOME/bpf-linker.tar.zst"
-          chmod +x "$HOME/.cargo/bin/bpf-linker"
-          "$HOME/.cargo/bin/bpf-linker" --version
-          echo "PATH=$HOME/.cargo/bin:$PATH" >> "$GITHUB_ENV"
-
       - name: Compile N1 firmware
         working-directory: ./openwrt
         run: |
@@ -151,6 +138,20 @@ jobs:
           # 失败时用「并行 + 详细日志」重试，不再退到单线程 -j1 全量重编
           make -j$(( $(nproc) + 1 )) || make -j$(( $(nproc) )) V=s
           ccache -s
+
+      # make defconfig 在依赖不满足时会静默丢弃 CONFIG_PACKAGE_honk=y，构建仍然
+      # 成功、Release 照发，结果是刷完固件没有 honk。这里把「编出来」变成硬断言。
+      - name: 断言 honk 真的进了固件
+        working-directory: ./openwrt
+        run: |
+          set -e
+          grep -q '^CONFIG_PACKAGE_honk=y' .config \
+            || { echo "::error::make defconfig 丢弃了 CONFIG_PACKAGE_honk"; exit 1; }
+          ls bin/targets/armsr/armv8/packages/ | grep -q '^honk_' \
+            || { echo "::error::没有编出 honk 包"; exit 1; }
+          tar tzf bin/targets/armsr/armv8/*rootfs.tar.gz | grep -q '^\./usr/bin/honk-core$' \
+            || { echo "::error::rootfs 里没有 /usr/bin/honk-core"; exit 1; }
+          echo "honk 断言通过：$(ls bin/targets/armsr/armv8/packages/ | grep '^honk_' | head -1)"
 
       - name: Package N1 firmware
         uses: ophub/amlogic-s9xxx-openwrt@main
@@ -162,7 +163,7 @@ jobs:
           kernel_usage: stable
           openwrt_kernel: 6.18.y
           auto_kernel: 'true'
-          openwrt_size: 256/1024
+          openwrt_size: 256/4096
           builder_name: Mackol
 
       - name: Upload firmware to release
