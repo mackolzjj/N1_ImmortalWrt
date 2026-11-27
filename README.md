@@ -59,24 +59,7 @@ uci show amlogic.config | grep -E 'firmware|kernel'
 | Release | `ImmortalWrt_<分支>_<YYYYMMDD>`，同日 `--clobber` 覆盖，仅留最近 10 个 |
 
 <details>
-<summary><b>展开：完整构建参数 · 在线更新 · 排错 · 自定义编译</b></summary>
-
-### 构建参数
-
-| 参数 | 值 |
-| --- | --- |
-| 源码处理 | checkout `v25.12.2` 后把 `25.12-SNAPSHOT` 改为 `25.12.2` |
-| 构建机 | `ubuntu-24.04`，`TZ=Asia/Shanghai`；77 个 apt 编译依赖已固化在 workflow 内，不再外部拉取 |
-| honk 工具链 | stable / nightly 版本取自 honk 源码的 `rust-toolchain.toml` 与 `crates/honk-ebpf/rust-toolchain.toml`，`aarch64-unknown-linux-musl` 目标装在同一工具链上 |
-| bpf-linker | 版本与 sha256 取 honk 源码的 `.github/ci/pins.env` 并 `sha256sum -c` 校验，不写死 |
-| honk 版本号 | 构建时取最新 tag，再通过 `HONK_VERSION` / `HONK_GIT_TAG` 导出给 `build.sh`，保证 `apk list` 显示版本与实际编译的 tag 一致（旧版靠 sed 改 `PKG_VERSION` 已失效） |
-| feeds rust | feeds 里 pin 的 rust 1.96.0 编 host rust 时会去 rust-lang CI 下载预编译 LLVM，该产物已被删除（实测 404，1.96.1 的仍在）。构建前用上游 `immortalwrt/packages` 的 `lang/rust` 覆盖，并先 HEAD 验证 CI LLVM 返回 200 再继续 |
-| `diy.sh` | clone `daeuniverse/openwrt-packages`、`ophub/luci-app-amlogic`、`Zerogiven-OpenWRT-Packages/luci-app-podman`；移除 `luci-app-dae` / `luci-app-daed` / `luci-app-passwall` / `dae` 与 `luci-app-attendedsysupgrade`；安装 Rust |
-| 默认网络 | `eth0` 静态 `192.168.2.2/24`，网关 `192.168.2.1`，仅 `lan` 无 wan |
-| 不集成 | `ppp` / `kmod-ppp` / `kmod-mppe`（无 PPPoE）、`wpad` / `hostapd`（无 WiFi）、`luci-app-samba4` |
-| 产物名 | ophub 生成 `openwrt_amlogic_s905d_k<内核>_<日期>.img.gz`，发布前改名为 `immortalwrt-armsr-armv8-generic_s905d_k<内核>_<YYYYMMDD>.img.gz`。`_s905d_` 两侧必须下划线、后缀必须 `.img.gz`——晶晨宝盒用 `_<board>_…k<内核>….img.gz` 这个正则挑资产，改成连字符会让「在线更新」找不到包 |
-| 产物校验 | 编译后断言 `CONFIG_PACKAGE_honk=y`、`packages/honk_*`、`rootfs` 里的 `/usr/bin/honk-core` 都在，缺一即失败（避免发出没有 honk 的固件） |
-| 失败诊断 | `build` job 设 `timeout-minutes: 300`；失败时把 `openwrt/logs/` 与 `targets/**/*.log` 作为 artifact 上传，保留 7 天 |
+<summary><b>展开：在线更新 · 排错 · 自定义编译</b></summary>
 
 ### 晶晨宝盒在线更新
 
