@@ -49,6 +49,7 @@ uci show amlogic.config | grep -E 'firmware|kernel'
 | 项 | 值 |
 | --- | --- |
 | LAN | `eth0` 静态 `192.168.2.2/24`，网关 `192.168.2.1`，只有 `lan` 没有 `wan` |
+| 空间 | boot 256 MB + rootfs 4 GB；首次启动会把数据分区扩到占满 eMMC（ophub 的 `.todo_rootfs_resize`），装 podman 镜像够用 |
 | 面板 | LuCI，honk 在「服务」下；honk 原生 API 启动要十几秒，太早访问会以为没起来 |
 | 调度 | 每日 04:00 `fstrim -a`；CPU 锁 `performance` 1.512 GHz |
 | 无线 | 板载 BCM43455 固件被禁用（见下） |
