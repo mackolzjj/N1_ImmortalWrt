@@ -35,6 +35,8 @@ openwrt-install-amlogic      # 需要固化到 eMMC 时执行
 
 > 建议**全新刷写、不保留配置**。跨源码线（官方 OpenWrt ↔ ImmortalWrt）保留配置容易残留不兼容项。
 
+> 镜像里的 rootfs 是 **4 GB 初始值**，刷到 eMMC 后首次启动会自动把数据分区扩到占满整块 eMMC，不用手动 `resize2fs`。
+
 刷完先核对这几项：
 
 ```bash
