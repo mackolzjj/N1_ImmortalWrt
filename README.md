@@ -67,7 +67,7 @@ uci show amlogic.config | grep -E 'firmware|kernel'
 | --- | --- |
 | 源码处理 | checkout `v25.12.2` 后把 `25.12-SNAPSHOT` 改为 `25.12.2` |
 | 构建机 | `ubuntu-24.04`，`TZ=Asia/Shanghai`；77 个 apt 编译依赖已固化在 workflow 内，不再外部拉取 |
-| honk 工具链 | stable / nightly 两个工具链版本从 honk 源码的 `rust-toolchain.toml`、`crates/honk-ebpf/rust-toolchain.toml` 读出，`rustup target add aarch64-unknown-linux-musl` 加在同一工具链上（写死版本会漏装 std 导致编译失败） |
+| honk 工具链 | stable / nightly 版本取自 honk 源码的 `rust-toolchain.toml` 与 `crates/honk-ebpf/rust-toolchain.toml`，`aarch64-unknown-linux-musl` 目标装在同一工具链上 |
 | bpf-linker | 版本与 sha256 取 honk 源码的 `.github/ci/pins.env` 并 `sha256sum -c` 校验，不写死 |
 | honk 版本号 | 构建时取最新 tag，再通过 `HONK_VERSION` / `HONK_GIT_TAG` 导出给 `build.sh`，保证 `apk list` 显示版本与实际编译的 tag 一致（旧版靠 sed 改 `PKG_VERSION` 已失效） |
 | feeds rust | feeds 里 pin 的 rust 1.96.0 编 host rust 时会去 rust-lang CI 下载预编译 LLVM，该产物已被删除（实测 404，1.96.1 的仍在）。构建前用上游 `immortalwrt/packages` 的 `lang/rust` 覆盖，并先 HEAD 验证 CI LLVM 返回 200 再继续 |
