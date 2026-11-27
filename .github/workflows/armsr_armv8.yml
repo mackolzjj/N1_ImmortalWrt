@@ -163,7 +163,7 @@ jobs:
         working-directory: ./openwrt
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
-          ccache -M 5G
+          ccache -M 3G   # 单仓库缓存上限 10GB，ccache 5G 会挤掉 dl/cargo
           ccache -z
           # 失败时用「并行 + 详细日志」重试，不再退到单线程 -j1 全量重编
           make -j$(( $(nproc) + 1 )) || make -j$(( $(nproc) )) V=s
