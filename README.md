@@ -2,7 +2,7 @@
 
 # Phicomm N1 · ImmortalWrt
 
-**内置 honk / doona 的斐讯 N1 旁路由固件** · eBPF / BTF 就绪 · 纯有线
+**斐讯 N1 有线旁路由固件** · 内置 honk / doona · 自编译 6.18 内核
 
 [![Build](https://github.com/mackolzjj/N1_ImmortalWrt/actions/workflows/armsr_armv8.yml/badge.svg)](https://github.com/mackolzjj/N1_ImmortalWrt/actions/workflows/armsr_armv8.yml)
 [![Release](https://img.shields.io/github/v/release/mackolzjj/N1_ImmortalWrt?label=Release)](https://github.com/mackolzjj/N1_ImmortalWrt/releases)
@@ -13,76 +13,77 @@
 
 </div>
 
-> 内核是**自编译**的 [`mackolzjj/ophub-kernel-ftrace`](https://github.com/mackolzjj/ophub-kernel-ftrace) `6.18.y`，已开启 honk 需要的 `FUNCTION_TRACER` / `DYNAMIC_FTRACE`，并把 nfqueue / nftables 编成内建（`=y`）。打包时由 `kernel_repo` 指定，不会取 ophub 官方内核。
+## 这是什么
 
-> 旁路由定位：拨号与 WiFi 交给主路由，本固件**不含 PPPoE / WiFi**，只把 eBPF 透明代理做扎实。
+一块斐讯 N1 当**旁路由**用：拨号和 WiFi 交给主路由，这台只做 eBPF 透明代理。
 
-## ✨ 特性
+- **系统**：ImmortalWrt 25.12.2（`armsr/armv8`，apk 包管理）
+- **内核**：自编译 [`ophub-kernel-ftrace`](https://github.com/mackolzjj/ophub-kernel-ftrace) `6.18.y`，开 `FUNCTION_TRACER` / `DYNAMIC_FTRACE`，nfqueue / nftables 内建
+- **代理**：`honk` + 内嵌 doona 面板，配 `luci-app-honk`、`v2ray-geoip` / `v2ray-geosite`
+- **其他**：`podman`（含 LuCI）、Argon 主题、`luci-app-amlogic`、`autocore`
+- **不含**：PPPoE（`ppp` / `kmod-ppp`）、WiFi（`wpad` / `hostapd`）、Samba
 
-- **开箱即用的代理**：`honk`（构建时取 `daeuniverse/honk` 最新 tag）+ 内嵌 **doona** 面板、`luci-app-honk`、`luci-lib-daeuniverse`、`v2ray-geoip` / `v2ray-geosite`
-- **eBPF 全链路就绪**：`DEBUG_INFO_BTF` / `BPF_EVENTS` / `XDP_SOCKETS` = y，`vmlinux-btf-builtin`、`BPF_TOOLCHAIN_HOST=y`
-- **容器与界面**：`podman` + LuCI、`luci-app-amlogic`、Argon 主题 + 配置、`autocore`
-- **日常工具**：`bsdtar` / `btrfs-progs` / `f2fs-tools` / `xfs-*` / `pigz` / `gawk` / `perl-*` / `fstrim` / `zoneinfo-asia`
-- **预置调优**：每日 04:00 `fstrim -a`，CPU `performance` 锁 1.512 GHz，晶晨宝盒在线更新已指向本库与自编译内核
-- **纯有线**：板载 BCM43455 (AP6255) 的固件与 `brcmfmac` 驱动不兼容（会每秒刷 `brcmf_dump_obss error (-52)`），已由 `zz-disable-wifi` 在首次启动时把固件改名 `.disabled` 拦截
+## 快速开始
 
-## 🚀 快速开始
-
-从 [Releases](https://github.com/mackolzjj/N1_ImmortalWrt/releases) 取 `immortalwrt-armsr-armv8-generic_s905d_k6.18.*_<日期>.img.gz` 并解压，写入 U 盘启动：
+从 [Releases](https://github.com/mackolzjj/N1_ImmortalWrt/releases) 下载 `immortalwrt-armsr-armv8-generic_s905d_k6.18.*_<日期>.img.gz`，解压后写入 U 盘启动：
 
 ```bash
 openwrt-install-amlogic      # 需要固化到 eMMC 时执行
-# 浏览器打开 http://192.168.2.2    root / password
 ```
 
-开机后建议核对：
+浏览器打开 `http://192.168.2.2`，账号 `root` / 密码 `password`。
+
+> 建议**全新刷写、不保留配置**。跨源码线（官方 OpenWrt ↔ ImmortalWrt）保留配置容易残留不兼容项。
+
+刷完先核对这几项：
 
 ```bash
-grep PRETTY_NAME /etc/os-release; uname -r
-ls -l /sys/kernel/btf/vmlinux
+grep PRETTY_NAME /etc/os-release; uname -r    # 预期 ImmortalWrt 25.12.2 / 6.18.x-ophub
+ls -l /sys/kernel/btf/vmlinux                 # honk 需要 BTF，文件必须在
 apk list --installed | grep -E 'honk|daeuniverse|podman'
 uci show amlogic.config | grep -E 'firmware|kernel'
 ```
 
-预期 `ImmortalWrt 25.12.2`、`6.18.x-ophub`（自编译内核，签名仍是 `-ophub`）、BTF 文件存在、honk 相关包已装，且 `amlogic_firmware_repo` / `amlogic_kernel_path` 都指向本项目的两个仓库。面板在 LuCI「服务」下；honk 原生 API 启动约十几秒，过早访问会误判为未监听。
+## 默认配置
 
-> ⚠️ 建议**全新刷写、不保留配置**。跨源码线（官方 OpenWrt ↔ ImmortalWrt）保留配置易残留不兼容项。
-
-## ⚙️ 构建与发布
-
-| | |
+| 项 | 值 |
 | --- | --- |
-| 源码 | `immortalwrt/immortalwrt` @ `v25.12.2` → `armsr/armv8` |
-| 内核 | **自编译** [`mackolzjj/ophub-kernel-ftrace`](https://github.com/mackolzjj/ophub-kernel-ftrace) 的 `kernel_stable` `6.18.y` + `auto_kernel: true`（已开启 `FUNCTION_TRACER` / `DYNAMIC_FTRACE`，nfqueue / nftables 内建） |
-| 打包 | `ophub/amlogic-s9xxx-openwrt` · `s905d` · `256/4096` · builder `Mackol` |
-| 触发 | push `main` / `master`、手动、每月 1 / 16 日 08:00（北京时间） |
-| Release | `ImmortalWrt_<分支>_<YYYYMMDD>`，同日 `--clobber` 覆盖，仅留最近 10 个 |
+| LAN | `eth0` 静态 `192.168.2.2/24`，网关 `192.168.2.1`，只有 `lan` 没有 `wan` |
+| 面板 | LuCI，honk 在「服务」下；honk 原生 API 启动要十几秒，太早访问会以为没起来 |
+| 调度 | 每日 04:00 `fstrim -a`；CPU 锁 `performance` 1.512 GHz |
+| 无线 | 板载 BCM43455 固件被禁用（见下） |
 
-<details>
-<summary><b>展开：在线更新 · 排错 · 自定义编译</b></summary>
+## 在线更新（晶晨宝盒）
 
-### 晶晨宝盒在线更新
+固件源和内核源都已指向本项目，**点「在线更新」不会把你刷成别的系统或官方内核**：
 
-`/etc/config/amlogic` 预置固件源 `mackolzjj/N1_ImmortalWrt`、内核源 [`mackolzjj/ophub-kernel-ftrace`](https://github.com/mackolzjj/ophub-kernel-ftrace)、`kernel_branch = 6.18`；打包阶段 ophub 会覆盖该文件，故另由 `files/etc/uci-defaults/zz-amlogic-repo` 在首次启动时写回，确保点「更新内核」不会换成官方内核。设备端可用 `uci show amlogic.config | grep -E 'firmware|kernel_branch|kernel_path'` 核对。
+```
+固件  mackolzjj/N1_ImmortalWrt
+内核  mackolzjj/ophub-kernel-ftrace（kernel_stable，6.18 线）
+```
 
-### 常见问题
+这些值由 `/etc/uci-defaults/zz-amlogic-repo` 在首次启动时写回（打包阶段会被 ophub 的模板覆盖，所以必须在设备上补一次）。
 
-| 现象 | 排查 |
+## 常见问题
+
+| 现象 | 说明 |
 | --- | --- |
-| honk 启动失败 | 确认 `/sys/kernel/btf/vmlinux` 存在、未自行更换内核；eBPF / BTF 不匹配会直接退出 |
-| 无法拨号 / 无 WiFi | 设计如此，`.config` 明确禁用 ppp 与无线组件 |
-| 日志每秒刷 `brcmf_dump_obss error (-52)` | 板载 BCM43455 固件与驱动不兼容。已由 `zz-disable-wifi` 处理；要恢复 WiFi，把 `/lib/firmware/brcm/brcmfmac43455-sdio*.bin.disabled` 改回原名并重启 |
-| LuCI 无 honk 菜单 | 确认刷的是本线；另一条 [`N1-OpenWrt`](https://github.com/mackolzjj/N1-OpenWrt) 是官方 OpenWrt 底子、不内置 honk，只提供 BTF 支持 |
-| 构建在 Compile 阶段失败，日志里有 `failed to download llvm from ci` | feeds 里的 rust 版本太旧、CI LLVM 产物已被 rust-lang 删除；workflow 已自动升级 feeds 里的 rust 并预检产物 |
+| 不能拨号 / 没有 WiFi | 设计如此，拨号和无线交给主路由 |
+| 日志每秒刷 `brcmf_dump_obss error (-52)` | 板载 BCM43455 的固件与驱动不兼容。已由 `zz-disable-wifi` 把 `/lib/firmware/brcm/brcmfmac43455-sdio*.bin` 改名 `.disabled`；要恢复 WiFi 就改回原名并重启 |
+| honk 起不来 | 先确认 `/sys/kernel/btf/vmlinux` 在，且没自己换过内核；eBPF / BTF 不匹配会直接退出 |
+| LuCI 里没有 honk 菜单 | 确认刷的是本仓库的固件；[`N1-OpenWrt`](https://github.com/mackolzjj/N1-OpenWrt) 那条线是官方 OpenWrt 底子、不带 honk |
 
-### 自定义编译
+## 目录结构
 
-`armsr/armv8/N1/.config`（内置包 / 内核选项）· `armsr/armv8/diy/diy.sh`（软件源、honk 拉取、Rust 工具链与 bpf-linker）· `armsr/armv8/N1/files/`（预置 `/etc/config`、`sysctl`、`uci-defaults`、crontabs）· `.github/workflows/armsr_armv8.yml`（触发、内核、产物断言、发布与保留规则）。
+```
+.github/workflows/armsr_armv8.yml      构建、产物断言、发布与保留
+armsr/armv8/diy/diy.sh                 软件源、honk 源码与 Rust 工具链
+armsr/armv8/N1/.config                 内置包与内核选项
+armsr/armv8/N1/files/                  预置 /etc/config、sysctl、uci-defaults、crontabs
+```
 
-改动后推送到 `main` / `master` 会触发构建；仅改文档且不想编译时，在 commit body 写 `[skip ci]`。
+推送到 `main` 会触发构建（每月 1 / 16 日也有定时构建），产物发到 Releases；只改文档不想编译时，在 commit body 写 `[skip ci]`。
 
-</details>
+## 致谢
 
-## 🙏 致谢
-
-[ImmortalWrt](https://github.com/immortalwrt/immortalwrt) · [ophub/amlogic-s9xxx-openwrt](https://github.com/ophub/amlogic-s9xxx-openwrt) · [ophub/kernel](https://github.com/ophub/kernel)（本库内核取自 [mackolzjj/ophub-kernel-ftrace](https://github.com/mackolzjj/ophub-kernel-ftrace)） · [daeuniverse/honk](https://github.com/daeuniverse/honk) · [daeuniverse/openwrt-packages](https://github.com/daeuniverse/openwrt-packages) · [luci-app-podman](https://github.com/Zerogiven-OpenWRT-Packages/luci-app-podman)
+[ImmortalWrt](https://github.com/immortalwrt/immortalwrt) · [ophub/amlogic-s9xxx-openwrt](https://github.com/ophub/amlogic-s9xxx-openwrt) · [ophub/kernel](https://github.com/ophub/kernel) · [daeuniverse/honk](https://github.com/daeuniverse/honk) · [daeuniverse/openwrt-packages](https://github.com/daeuniverse/openwrt-packages) · [luci-app-podman](https://github.com/Zerogiven-OpenWRT-Packages/luci-app-podman)
