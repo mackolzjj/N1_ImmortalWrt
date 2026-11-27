@@ -13,17 +13,18 @@
 
 </div>
 
-> 本仓库由 [`Phicomm-N1_ImmortalWrt`](https://github.com/mackolzjj/Phicomm-N1_ImmortalWrt) 复制而来，唯一区别是内核改用自编译的 [`mackolzjj/ophub-kernel-ftrace`](https://github.com/mackolzjj/ophub-kernel-ftrace) `6.18.y`（补齐 honk 所需的 ftrace 开关）；源仓库仍走 ophub 官方内核，与本仓库互不影响。
+> 内核是**自编译**的 [`mackolzjj/ophub-kernel-ftrace`](https://github.com/mackolzjj/ophub-kernel-ftrace) `6.18.y`，已开启 honk 需要的 `FUNCTION_TRACER` / `DYNAMIC_FTRACE`，并把 nfqueue / nftables 编成内建（`=y`）。打包时由 `kernel_repo` 指定，不会取 ophub 官方内核。
 
 > 旁路由定位：拨号与 WiFi 交给主路由，本固件**不含 PPPoE / WiFi**，只把 eBPF 透明代理做扎实。
 
 ## ✨ 特性
 
-- **开箱即用的代理**：`honk`（构建时自动取 `daeuniverse/honk` 最新 tag）+ 内嵌 **doona** 面板、`luci-app-honk`、`luci-lib-daeuniverse`、`v2ray-geoip` / `v2ray-geosite`
+- **开箱即用的代理**：`honk`（构建时取 `daeuniverse/honk` 最新 tag）+ 内嵌 **doona** 面板、`luci-app-honk`、`luci-lib-daeuniverse`、`v2ray-geoip` / `v2ray-geosite`
 - **eBPF 全链路就绪**：`DEBUG_INFO_BTF` / `BPF_EVENTS` / `XDP_SOCKETS` = y，`vmlinux-btf-builtin`、`BPF_TOOLCHAIN_HOST=y`
 - **容器与界面**：`podman` + LuCI、`luci-app-amlogic`、Argon 主题 + 配置、`autocore`
 - **日常工具**：`bsdtar` / `btrfs-progs` / `f2fs-tools` / `xfs-*` / `pigz` / `gawk` / `perl-*` / `fstrim` / `zoneinfo-asia`
-- **预置调优**：每日 04:00 `fstrim -a`，CPU `performance` 锁 1.512 GHz，晶晨宝盒在线更新已指向本库
+- **预置调优**：每日 04:00 `fstrim -a`，CPU `performance` 锁 1.512 GHz，晶晨宝盒在线更新已指向本库与自编译内核
+- **纯有线**：板载 BCM43455 (AP6255) 的固件与 `brcmfmac` 驱动不兼容（会每秒刷 `brcmf_dump_obss error (-52)`），已由 `zz-disable-wifi` 在首次启动时把固件改名 `.disabled` 拦截
 
 ## 🚀 快速开始
 
@@ -40,9 +41,10 @@ openwrt-install-amlogic      # 需要固化到 eMMC 时执行
 grep PRETTY_NAME /etc/os-release; uname -r
 ls -l /sys/kernel/btf/vmlinux
 apk list --installed | grep -E 'honk|daeuniverse|podman'
+uci show amlogic.config | grep -E 'firmware|kernel'
 ```
 
-预期 `ImmortalWrt 25.12.2`、`6.18.x-ophub`、BTF 文件存在、honk 相关包已装。面板在 LuCI「服务」下；honk 原生 API 启动约十几秒，过早访问会误判为未监听。
+预期 `ImmortalWrt 25.12.2`、`6.18.x-ophub`（自编译内核，签名仍是 `-ophub`）、BTF 文件存在、honk 相关包已装，且 `amlogic_firmware_repo` / `amlogic_kernel_path` 都指向本项目的两个仓库。面板在 LuCI「服务」下；honk 原生 API 启动约十几秒，过早访问会误判为未监听。
 
 > ⚠️ 建议**全新刷写、不保留配置**。跨源码线（官方 OpenWrt ↔ ImmortalWrt）保留配置易残留不兼容项。
 
@@ -51,7 +53,7 @@ apk list --installed | grep -E 'honk|daeuniverse|podman'
 | | |
 | --- | --- |
 | 源码 | `immortalwrt/immortalwrt` @ `v25.12.2` → `armsr/armv8` |
-| 内核 | **自编译** [`mackolzjj/ophub-kernel-ftrace`](https://github.com/mackolzjj/ophub-kernel-ftrace) 的 `kernel_stable` `6.18.y` + `auto_kernel: true`（已开启 `FUNCTION_TRACER` / `DYNAMIC_FTRACE`） |
+| 内核 | **自编译** [`mackolzjj/ophub-kernel-ftrace`](https://github.com/mackolzjj/ophub-kernel-ftrace) 的 `kernel_stable` `6.18.y` + `auto_kernel: true`（已开启 `FUNCTION_TRACER` / `DYNAMIC_FTRACE`，nfqueue / nftables 内建） |
 | 打包 | `ophub/amlogic-s9xxx-openwrt` · `s905d` · `256/4096` · builder `Mackol` |
 | 触发 | push `main` / `master`、手动、每月 1 / 16 日 08:00（北京时间） |
 | Release | `ImmortalWrt_<分支>_<YYYYMMDD>`，同日 `--clobber` 覆盖，仅留最近 10 个 |
@@ -65,12 +67,16 @@ apk list --installed | grep -E 'honk|daeuniverse|podman'
 | --- | --- |
 | 源码处理 | checkout `v25.12.2` 后把 `25.12-SNAPSHOT` 改为 `25.12.2` |
 | 构建机 | `ubuntu-24.04`，`TZ=Asia/Shanghai`；77 个 apt 编译依赖已固化在 workflow 内，不再外部拉取 |
-| Rust / eBPF | 工具链版本从 honk 源码的 `rust-toolchain.toml` / `crates/honk-ebpf/rust-toolchain.toml` 读出，`bpf-linker` 版本与 sha256 取上游 `.github/ci/pins.env`（都在 `diy.sh` 里，不写死） |
+| honk 工具链 | stable / nightly 两个工具链版本从 honk 源码的 `rust-toolchain.toml`、`crates/honk-ebpf/rust-toolchain.toml` 读出，`rustup target add aarch64-unknown-linux-musl` 加在同一工具链上（写死版本会漏装 std 导致编译失败） |
+| bpf-linker | 版本与 sha256 取 honk 源码的 `.github/ci/pins.env` 并 `sha256sum -c` 校验，不写死 |
+| honk 版本号 | 构建时取最新 tag，再通过 `HONK_VERSION` / `HONK_GIT_TAG` 导出给 `build.sh`，保证 `apk list` 显示版本与实际编译的 tag 一致（旧版靠 sed 改 `PKG_VERSION` 已失效） |
+| feeds rust | feeds 里 pin 的 rust 1.96.0 编 host rust 时会去 rust-lang CI 下载预编译 LLVM，该产物已被删除（实测 404，1.96.1 的仍在）。构建前用上游 `immortalwrt/packages` 的 `lang/rust` 覆盖，并先 HEAD 验证 CI LLVM 返回 200 再继续 |
 | `diy.sh` | clone `daeuniverse/openwrt-packages`、`ophub/luci-app-amlogic`、`Zerogiven-OpenWRT-Packages/luci-app-podman`；移除 `luci-app-dae` / `luci-app-daed` / `luci-app-passwall` / `dae` 与 `luci-app-attendedsysupgrade`；安装 Rust |
 | 默认网络 | `eth0` 静态 `192.168.2.2/24`，网关 `192.168.2.1`，仅 `lan` 无 wan |
 | 不集成 | `ppp` / `kmod-ppp` / `kmod-mppe`（无 PPPoE）、`wpad` / `hostapd`（无 WiFi）、`luci-app-samba4` |
 | 产物名 | ophub 生成 `openwrt_amlogic_s905d_k<内核>_<日期>.img.gz`，发布前改名为 `immortalwrt-armsr-armv8-generic_s905d_k<内核>_<YYYYMMDD>.img.gz`。`_s905d_` 两侧必须下划线、后缀必须 `.img.gz`——晶晨宝盒用 `_<board>_…k<内核>….img.gz` 这个正则挑资产，改成连字符会让「在线更新」找不到包 |
 | 产物校验 | 编译后断言 `CONFIG_PACKAGE_honk=y`、`packages/honk_*`、`rootfs` 里的 `/usr/bin/honk-core` 都在，缺一即失败（避免发出没有 honk 的固件） |
+| 失败诊断 | `build` job 设 `timeout-minutes: 300`；失败时把 `openwrt/logs/` 与 `targets/**/*.log` 作为 artifact 上传，保留 7 天 |
 
 ### 晶晨宝盒在线更新
 
@@ -82,11 +88,13 @@ apk list --installed | grep -E 'honk|daeuniverse|podman'
 | --- | --- |
 | honk 启动失败 | 确认 `/sys/kernel/btf/vmlinux` 存在、未自行更换内核；eBPF / BTF 不匹配会直接退出 |
 | 无法拨号 / 无 WiFi | 设计如此，`.config` 明确禁用 ppp 与无线组件 |
-| LuCI 无 honk 菜单 | 确认刷的是本线；另一条 `Phicomm-N1_OpenWrt` 不内置 honk，仅提供 BTF 支持 |
+| 日志每秒刷 `brcmf_dump_obss error (-52)` | 板载 BCM43455 固件与驱动不兼容。已由 `zz-disable-wifi` 处理；要恢复 WiFi，把 `/lib/firmware/brcm/brcmfmac43455-sdio*.bin.disabled` 改回原名并重启 |
+| LuCI 无 honk 菜单 | 确认刷的是本线；另一条 [`N1-OpenWrt`](https://github.com/mackolzjj/N1-OpenWrt) 是官方 OpenWrt 底子、不内置 honk，只提供 BTF 支持 |
+| 构建在 Compile 阶段失败，日志里有 `failed to download llvm from ci` | feeds 里的 rust 版本太旧、CI LLVM 产物已被 rust-lang 删除；workflow 已自动升级 feeds 里的 rust 并预检产物 |
 
 ### 自定义编译
 
-`armsr/armv8/N1/.config`（内置包 / 内核选项）· `armsr/armv8/diy/diy.sh`（软件源、honk 拉取、Rust）· `armsr/armv8/N1/files/`（预置 `/etc/config` 与 crontabs）· `armsr/armv8/N1/mk_s905d_n1.sh`（本地打包）· `.github/workflows/armsr_armv8.yml`（触发、内核、Release 规则）。
+`armsr/armv8/N1/.config`（内置包 / 内核选项）· `armsr/armv8/diy/diy.sh`（软件源、honk 拉取、Rust 工具链与 bpf-linker）· `armsr/armv8/N1/files/`（预置 `/etc/config`、`sysctl`、`uci-defaults`、crontabs）· `.github/workflows/armsr_armv8.yml`（触发、内核、产物断言、发布与保留规则）。
 
 改动后推送到 `main` / `master` 会触发构建；仅改文档且不想编译时，在 commit body 写 `[skip ci]`。
 
@@ -94,4 +102,4 @@ apk list --installed | grep -E 'honk|daeuniverse|podman'
 
 ## 🙏 致谢
 
-[ImmortalWrt](https://github.com/immortalwrt/immortalwrt) · [ophub/amlogic-s9xxx-openwrt](https://github.com/ophub/amlogic-s9xxx-openwrt) · [ophub/kernel](https://github.com/ophub/kernel) · [daeuniverse/honk](https://github.com/daeuniverse/honk) · [daeuniverse/openwrt-packages](https://github.com/daeuniverse/openwrt-packages) · [luci-app-podman](https://github.com/Zerogiven-OpenWRT-Packages/luci-app-podman)
+[ImmortalWrt](https://github.com/immortalwrt/immortalwrt) · [ophub/amlogic-s9xxx-openwrt](https://github.com/ophub/amlogic-s9xxx-openwrt) · [ophub/kernel](https://github.com/ophub/kernel)（本库内核取自 [mackolzjj/ophub-kernel-ftrace](https://github.com/mackolzjj/ophub-kernel-ftrace)） · [daeuniverse/honk](https://github.com/daeuniverse/honk) · [daeuniverse/openwrt-packages](https://github.com/daeuniverse/openwrt-packages) · [luci-app-podman](https://github.com/Zerogiven-OpenWRT-Packages/luci-app-podman)
