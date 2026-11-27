@@ -168,9 +168,20 @@ jobs:
 
       - name: Upload firmware to release
         run: |
-          tag="ImmortalWrt_${{ github.ref_name }}_${{ env.FILE_DATE }}"
+          set -e
+          # ophub 产出的名字是 openwrt_amlogic_s905d_k<内核>_<YYYY.MM.DD>.img.gz，
+          # 这里改成 ImmortalWrt 官方命名风格。后缀必须保留 .img.gz：
+          # 晶晨宝盒按 amlogic_firmware_suffix 匹配资产，改了后缀在线更新就找不到包。
+          src=$(ls "$PACKAGED_OUTPUTPATH"/*.img.gz | head -1)
+          [ -n "$src" ] || { echo "::error::没有找到 .img.gz 产物"; exit 1; }
+          kver=$(basename "$src" | sed -nE 's/.*_k([0-9]+\.[0-9]+\.[0-9]+)_.*/\1/p')
+          [ -n "$kver" ] || { echo "::error::无法从 $(basename "$src") 解析内核版本"; exit 1; }
+          asset="$PACKAGED_OUTPUTPATH/immortalwrt-armsr-armv8-generic-s905d-k${kver}-${FILE_DATE}.img.gz"
+          [ "$src" = "$asset" ] || mv -f "$src" "$asset"
+          echo "发布资产: $(basename "$asset")  $(stat -c %s "$asset") bytes"
+          tag="ImmortalWrt_${{ github.ref_name }}_${FILE_DATE}"
           gh release create $tag --repo ${{ github.repository }} --title "$tag" --notes "$(printf '首次使用建议全新刷写\n* 基本信息\nIP: 192.168.2.2\n账户: root\n密码: password')" 2> /dev/null || true
-          gh release upload $tag ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz --repo ${{ github.repository }} --clobber
+          gh release upload $tag "$asset" --repo ${{ github.repository }} --clobber
 
       - name: Delete old releases
         run: |

@@ -27,7 +27,7 @@
 
 ## 🚀 快速开始
 
-从 [Releases](https://github.com/mackolzjj/N1_ImmortalWrt/releases) 取 `openwrt_amlogic_s905d_k6.18.*.img.gz` 并解压，写入 U 盘启动：
+从 [Releases](https://github.com/mackolzjj/N1_ImmortalWrt/releases) 取 `immortalwrt-armsr-armv8-generic-s905d-k6.18.*-<日期>.img.gz` 并解压，写入 U 盘启动：
 
 ```bash
 openwrt-install-amlogic      # 需要固化到 eMMC 时执行
@@ -69,7 +69,7 @@ apk list --installed | grep -E 'honk|daeuniverse|podman'
 | `diy.sh` | clone `daeuniverse/openwrt-packages`、`ophub/luci-app-amlogic`、`Zerogiven-OpenWRT-Packages/luci-app-podman`；移除 `luci-app-dae` / `luci-app-daed` / `luci-app-passwall` / `dae` 与 `luci-app-attendedsysupgrade`；安装 Rust |
 | 默认网络 | `eth0` 静态 `192.168.2.2/24`，网关 `192.168.2.1`，仅 `lan` 无 wan |
 | 不集成 | `ppp` / `kmod-ppp` / `kmod-mppe`（无 PPPoE）、`wpad` / `hostapd`（无 WiFi）、`luci-app-samba4` |
-| 产物名 | `openwrt_amlogic_s905d_k6.18.*_<日期>.img.gz`（ophub 生成，与 Release 名不同） |
+| 产物名 | ophub 生成 `openwrt_amlogic_s905d_k<内核>_<日期>.img.gz`，发布前改名为 `immortalwrt-armsr-armv8-generic-s905d-k<内核>-<YYYYMMDD>.img.gz`（后缀必须是 `.img.gz`，晶晨宝盒按它匹配资产） |
 | 产物校验 | 编译后断言 `CONFIG_PACKAGE_honk=y`、`packages/honk_*`、`rootfs` 里的 `/usr/bin/honk-core` 都在，缺一即失败（避免发出没有 honk 的固件） |
 
 ### 晶晨宝盒在线更新
