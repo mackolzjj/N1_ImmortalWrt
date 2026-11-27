@@ -117,6 +117,36 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
+      # feeds 里 pin 的 rust 1.96.0 编 host rust 时要下载 rust-lang CI 的预编译 LLVM：
+      #   https://ci-artifacts.rust-lang.org/rustc-builds/<commit>/rust-dev-1.96.0-x86_64-unknown-linux-gnu.tar.xz
+      # 该产物已被 rust-lang 删除（实测 404），1.96.1 的还在（实测 200 / 107MB）。
+      # 因此把 feeds 里的 rust 换成上游当前版本。必须放在最后一次 feeds update 之后，
+      # 否则 feeds 的 git 操作会把改动还原。
+      - name: 升级 feeds 里的 rust（旧版 CI LLVM 已 404）
+        working-directory: ./openwrt
+        run: |
+          set -euo pipefail
+          old=$(sed -n 's/^PKG_VERSION:=//p' feeds/packages/lang/rust/Makefile | head -1)
+          echo "feeds 里的 rust: ${old}"
+          rm -rf /tmp/iw-packages
+          git clone --depth=1 --filter=blob:none --sparse https://github.com/immortalwrt/packages /tmp/iw-packages
+          git -C /tmp/iw-packages sparse-checkout set lang/rust
+          new=$(sed -n 's/^PKG_VERSION:=//p' /tmp/iw-packages/lang/rust/Makefile | head -1)
+          echo "上游 rust: ${new}"
+          [ "${new}" != "${old}" ] || { echo "::error::上游 rust 仍是 ${old}，其 CI LLVM 已 404，无法构建"; exit 1; }
+          rm -rf feeds/packages/lang/rust
+          cp -rf /tmp/iw-packages/lang/rust feeds/packages/lang/
+          rm -rf /tmp/iw-packages
+          grep -q '^PKG_HASH:=' feeds/packages/lang/rust/Makefile || { echo "::error::rust 包不完整（缺 PKG_HASH）"; exit 1; }
+          # 先确认新版本对应的 CI LLVM 真的存在，别又白跑一小时
+          ver=$(sed -n 's/^PKG_VERSION:=//p' feeds/packages/lang/rust/Makefile | head -1)
+          sha=$(curl -fsSL "https://static.rust-lang.org/dist/channel-rust-${ver}.toml" \
+                | sed -n 's/^git_commit_hash = "\([0-9a-f]*\)"/\1/p' | head -1)
+          url="https://ci-artifacts.rust-lang.org/rustc-builds/${sha}/rust-dev-${ver}-x86_64-unknown-linux-gnu.tar.xz"
+          code=$(curl -s -o /dev/null -w '%{http_code}' -I "$url")
+          echo "rust ${ver} 的 CI LLVM: HTTP ${code}  ($url)"
+          [ "${code}" = "200" ] || { echo "::error::rust ${ver} 的 CI LLVM 不可用（HTTP ${code}）"; exit 1; }
+
       - name: Load N1 custom config
         run: |
           rm -rf openwrt/files openwrt/.config
