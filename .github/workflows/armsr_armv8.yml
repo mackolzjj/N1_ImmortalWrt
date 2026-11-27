@@ -176,8 +176,15 @@ jobs:
           [ -n "$src" ] || { echo "::error::没有找到 .img.gz 产物"; exit 1; }
           kver=$(basename "$src" | sed -nE 's/.*_k([0-9]+\.[0-9]+\.[0-9]+)_.*/\1/p')
           [ -n "$kver" ] || { echo "::error::无法从 $(basename "$src") 解析内核版本"; exit 1; }
-          asset="$PACKAGED_OUTPUTPATH/immortalwrt-armsr-armv8-generic-s905d-k${kver}-${FILE_DATE}.img.gz"
+          # 名字里 s905d 两侧必须是下划线：luci-app-amlogic 的
+          # amlogic_check_firmware.sh 用 awk 匹配 /releases/download/[^"]*_<board>_[^"]*k<内核>\.[0-9]+[^"]*<suffix>
+          # 来挑资产，改成连字符就一个都匹配不到，「在线更新」会报无可用固件。
+          asset="$PACKAGED_OUTPUTPATH/immortalwrt-armsr-armv8-generic_s905d_k${kver}_${FILE_DATE}.img.gz"
           [ "$src" = "$asset" ] || mv -f "$src" "$asset"
+          case "$(basename "$asset")" in
+            *_s905d_*k"$kver"*.img.gz) : ;;
+            *) echo "::error::资产名 $(basename "$asset") 不满足晶晨宝盒的匹配规则 (_s905d_…k<内核>….img.gz)"; exit 1 ;;
+          esac
           echo "发布资产: $(basename "$asset")  $(stat -c %s "$asset") bytes"
           tag="ImmortalWrt_${{ github.ref_name }}_${FILE_DATE}"
           gh release create $tag --repo ${{ github.repository }} --title "$tag" --notes "$(printf '首次使用建议全新刷写\n* 基本信息\nIP: 192.168.2.2\n账户: root\n密码: password')" 2> /dev/null || true
