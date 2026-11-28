@@ -177,9 +177,10 @@ jobs:
           set -e
           grep -q '^CONFIG_PACKAGE_honk=y' .config \
             || { echo "::error::make defconfig 丢弃了 CONFIG_PACKAGE_honk"; exit 1; }
-          # apk 是 honk-<ver>.apk、opkg 是 honk_<ver>.ipk，两种都认
-          pkg=$(ls bin/targets/armsr/armv8/packages/ | grep -E '^honk[-_]' | head -1)
-          [ -n "$pkg" ] || { echo "::error::没有编出 honk 包"; exit 1; }
+          # 25.12 用 apk + per-feed 输出：包在 bin/packages/<arch>/<feed>/ 下，
+          # 不是 bin/targets/<t>/<s>/packages/（那个目录只在 per-device rootfs 时才生成）
+          pkg=$(ls bin/packages/*/*/honk[-_]*.apk bin/packages/*/*/honk[-_]*.ipk 2>/dev/null | head -1)
+          echo "honk 包: ${pkg:-未找到（仅提示，以 rootfs 内容为准）}"
           # 通配可能匹配到多个 rootfs 归档，只取第一个，避免 tar 把第二个当成员名
           rootfs=$(ls bin/targets/armsr/armv8/*rootfs.tar.gz | head -1)
           [ -n "$rootfs" ] || { echo "::error::没有找到 rootfs.tar.gz"; exit 1; }
