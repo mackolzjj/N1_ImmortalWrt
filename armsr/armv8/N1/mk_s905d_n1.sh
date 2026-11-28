@@ -1,4 +1,18 @@
 #!/bin/bash
+# 已废弃，CI 不使用本脚本。
+#
+# 本文件是 ophub/amlogic-s9xxx-openwrt 上游「本地打包脚本」的副本，功能与 CI 里的
+# `Package N1 firmware`（ophub/amlogic-s9xxx-openwrt action）相同：把 rootfs.tar.gz
+# 和内核做成可启动镜像。但两边的输入不一样，直接跑不起来：
+#
+#   1. 第 4-5 行 source make.env / public_funcs，这两个文件属于上游仓库，本仓库没有
+#   2. 依赖 ${PWD}/files/ 下约 20 个资源（bootfiles、u-boot bin、cpustat、balethirq 等），
+#      本仓库的 armsr/armv8/N1/files 下只有 etc/
+#   3. 内核取自本地 ${KERNEL_PKG_HOME}，并要求 modules-/boot-/dtb- 三个分离的 tarball；
+#      而 CI 走 kernel_repo=mackolzjj/ophub-kernel-ftrace，取的是合并的 <版本>.tar.gz
+#   4. 分区写死 BOOT_MB=384 / ROOTFS_MB=1280 + btrfs，与 CI 的 openwrt_size 256/4096 不一致
+#
+# 需要本地打包时，请直接参考上游仓库的 mk_*.sh 与 make.env，不要照本文件改。
 
 echo "========================= begin $0 ==========================="
 source make.env
