@@ -7,6 +7,7 @@ set -e
 git clone https://github.com/daeuniverse/openwrt-packages --single-branch --depth=1 clone/daepkg
 git clone https://github.com/ophub/luci-app-amlogic --single-branch --depth=1 clone/amlogic
 git clone https://github.com/Zerogiven-OpenWRT-Packages/luci-app-podman --single-branch --depth=1 feeds/luci/applications/luci-app-podman
+git clone https://github.com/anothaDev/luci-theme-vantage --single-branch --depth=1 clone/vantage
 # 每次编译自动取 Argon 最新稳定版 tag（三段式版本号，跳过 beta/rc 预发布；
 # 与 honk 同用 git ls-remote，无需 token、不受 GitHub API 速率限制）
 ARGON_TAG=$(git ls-remote --tags --sort="-v:refname" https://github.com/jerrykuku/luci-theme-argon \
@@ -31,6 +32,13 @@ cp -rf clone/amlogic/luci-app-amlogic feeds/luci/applications/
 cp -rf clone/daepkg/luci-app-honk feeds/luci/applications/
 cp -rf clone/daepkg/luci-lib-daeuniverse feeds/luci/libs/
 cp -rf clone/daepkg/honk clone/daepkg/vmlinux-btf-builtin feeds/packages/net/
+
+# Vantage：主题进 themes/，看板 app 进 applications/（同一仓库两个独立包）。
+# 它有 4 个子包，只取这两个：-aps 是无线接入点看板（本固件无 WiFi）、
+# -traffic 是流量明细页，非必需。
+rm -rf feeds/luci/themes/luci-theme-vantage feeds/luci/applications/luci-app-vantage
+cp -rf clone/vantage/luci-theme-vantage feeds/luci/themes/
+cp -rf clone/vantage/luci-app-vantage feeds/luci/applications/
 
 # honk's OpenWrt Makefile builds from ./src, so clone the upstream honk source in
 # 每次编译自动取 honk 仓库最新 tag（按版本号降序取最新，兼容 beta/rc 预发布）
