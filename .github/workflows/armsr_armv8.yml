@@ -28,10 +28,12 @@ env:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    # 默认 360 分钟会被 GitHub 硬杀且不留任何日志；显式设上限
+    timeout-minutes: 300
 
     steps:
       - name: Checkout
-        uses: actions/checkout@main
+        uses: actions/checkout@v6.0.3   # 固定版本，不用浮动的 @main
 
       # 清盘：删除 runner 预装的 .NET / Android SDK / CodeQL / 数据库等无关组件，腾出约 10~15GB 空间，
       # 避免后续编译内核时磁盘写满（No space left on device）导致构建失败
@@ -189,7 +191,9 @@ jobs:
           echo "honk 断言通过：$pkg / $(basename "$rootfs")"
 
       - name: Package N1 firmware
-        uses: ophub/amlogic-s9xxx-openwrt@main
+        # 固定到 commit：上游只有 v0.1.0 / kernel_stable 两个 tag，后者是内核 release 用的，
+        # 不是 action 版本，所以用 sha 固定。升级时改这一行并跑一次验证。
+        uses: ophub/amlogic-s9xxx-openwrt@30551662cadb27d89c92e4f470337fff5d7d30ab
         with:
           openwrt_path: openwrt/bin/targets/armsr/armv8/*rootfs.tar.gz
           openwrt_board: s905d
