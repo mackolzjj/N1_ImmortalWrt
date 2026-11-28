@@ -153,7 +153,7 @@ jobs:
         run: |
           rm -rf openwrt/files openwrt/.config
           mv armsr/armv8/N1/files armsr/armv8/N1/.config openwrt/
-          chmod -R 755 openwrt
+          chmod -R 755 openwrt/files   # 只需要 uci-defaults 可执行；整棵树几十万文件没必要
 
       - name: Download package
         working-directory: ./openwrt
@@ -231,4 +231,38 @@ jobs:
 
       - name: Delete old releases
         run: |
-          gh release list --repo ${{ github.repository }} --limit 100 --json tagName --jq '.[].tagName' | tail -n +11 | while read -r tag; do gh release delete "$tag" --repo ${{ github.repository }} --cleanup-tag --yes; done
+          gh release list --repo ${{ github.repository }} --limit 100 --json tagName --jq '.[].tagName' | tail -n +6 | while read -r tag; do gh release delete "$tag" --repo ${{ github.repository }} --cleanup-tag --yes; done
+
+      # 失败时把 OpenWrt 的日志捞出来，否则只能靠登 GitHub 网页看 annotations
+      - name: Upload build logs on failure
+        if: ${{ failure() && !cancelled() }}
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: build-logs-${{ github.run_id }}
+          path: |
+            openwrt/logs/
+            openwrt/bin/targets/armsr/armv8/*.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      # 三个缓存的 key 都带 run_id，每次构建新增一条，靠 LRU 自然淘汰；
+      # 这里主动只留最近 1 条，避免把 10GB 配额占满后互相挤掉。
+      - name: 清理旧缓存
+        if: ${{ success() }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          repo="${{ github.repository }}"
+          keep=1
+          for prefix in "ccache-n1-immortalwrt-" "dl-n1-immortalwrt-" "cargo-n1-immortalwrt-"; do
+            mapfile -t ids < <(gh api "repos/${repo}/actions/caches?per_page=100" \
+              --jq ".actions_caches[] | select(.key | startswith(\"${prefix}\")) | [.created_at, .id] | @tsv" \
+              | sort -r | cut -f2)
+            total=${#ids[@]}
+            echo "${prefix}* 共 ${total} 条，保留最近 ${keep} 条"
+            if [ "${total}" -le "${keep}" ]; then continue; fi
+            for id in "${ids[@]:${keep}}"; do
+              gh api -X DELETE "repos/${repo}/actions/caches/${id}" >/dev/null && echo "  删除 id=${id}"
+            done
+          done
