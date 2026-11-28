@@ -18,9 +18,10 @@
 一块斐讯 N1 当**旁路由**用：拨号和 WiFi 交给主路由，这台只做 eBPF 透明代理。
 
 - **系统**：ImmortalWrt 25.12.2（`armsr/armv8`，apk 包管理）
-- **内核**：自编译 [`ophub-kernel-ftrace`](https://github.com/mackolzjj/ophub-kernel-ftrace) `6.18.y`，开 `FUNCTION_TRACER` / `DYNAMIC_FTRACE`，nfqueue / nftables 内建
+- **内核**：自编译 [`ophub-kernel-ftrace`](https://github.com/mackolzjj/ophub-kernel-ftrace) `6.18.y`，开 `FUNCTION_TRACER` / `DYNAMIC_FTRACE` / `NETKIT` / `BPF_JIT_ALWAYS_ON`，nfqueue / nftables 内建
 - **代理**：`honk` + 内嵌 doona 面板，配 `luci-app-honk`、`v2ray-geoip` / `v2ray-geosite`
-- **其他**：`podman`（含 LuCI）、Argon 主题、`luci-app-amlogic`、`autocore`
+- **界面**：Argon 与 [Vantage](https://github.com/anothaDev/luci-theme-vantage) 两套主题 + Vantage 实时看板（默认 Argon，可在「系统 → 语言和界面」切换）
+- **其他**：`podman`（含 LuCI）、`luci-app-amlogic`、`autocore`
 - **不含**：PPPoE（`ppp` / `kmod-ppp`）、WiFi（`wpad` / `hostapd`）、Samba
 
 ## 快速开始
@@ -37,7 +38,7 @@ openwrt-install-amlogic      # 需要固化到 eMMC 时执行
 
 > 镜像里的 rootfs 是 **4 GB 初始值**，刷到 eMMC 后首次启动会自动把数据分区扩到占满整块 eMMC，不用手动 `resize2fs`。
 
-刷完先核对这几项：
+刷完先核对这几项（Vantage 主题与看板已内置，切换见下）：
 
 ```bash
 grep PRETTY_NAME /etc/os-release; uname -r    # 预期 ImmortalWrt 25.12.2 / 6.18.x-ophub
@@ -53,6 +54,7 @@ uci show amlogic.config | grep -E 'firmware|kernel'
 | LAN | `eth0` 静态 `192.168.2.2/24`，网关 `192.168.2.1`，只有 `lan` 没有 `wan` |
 | 空间 | boot 256 MB + rootfs 4 GB；首次启动会把数据分区扩到占满 eMMC（ophub 的 `.todo_rootfs_resize`），装 podman 镜像够用 |
 | 面板 | LuCI，honk 在「服务」下；honk 原生 API 启动要十几秒，太早访问会以为没起来 |
+| 主题 | 默认 Argon；切到 Vantage 后首页是实时看板（客户端、流量、防火墙概览），支持 `Ctrl + K` 全站搜索 |
 | 调度 | 每日 04:00 `fstrim -a`；CPU 锁 `performance` 1.512 GHz |
 | 无线 | 板载 BCM43455 固件被禁用（见下） |
 
@@ -75,6 +77,7 @@ uci show amlogic.config | grep -E 'firmware|kernel'
 | 日志每秒刷 `brcmf_dump_obss error (-52)` | 板载 BCM43455 的固件与驱动不兼容。已由 `zz-disable-wifi` 把 `/lib/firmware/brcm/brcmfmac43455-sdio*.bin` 改名 `.disabled`；要恢复 WiFi 就改回原名并重启 |
 | honk 起不来 | 先确认 `/sys/kernel/btf/vmlinux` 在，且没自己换过内核；eBPF / BTF 不匹配会直接退出 |
 | LuCI 里没有 honk 菜单 | 确认刷的是本仓库的固件；[`N1-OpenWrt`](https://github.com/mackolzjj/N1-OpenWrt) 那条线是官方 OpenWrt 底子、不带 honk |
+| Vantage 看板里 Wi-Fi 相关是空的 | 这台没有无线，看板的 Wi-Fi 健康检查、信号、radio 卡片自然没有数据；其余板块正常 |
 
 ## 目录结构
 
@@ -87,4 +90,4 @@ armsr/armv8/N1/files/                  预置 /etc/config、sysctl、uci-default
 
 ## 致谢
 
-[ImmortalWrt](https://github.com/immortalwrt/immortalwrt) · [ophub/amlogic-s9xxx-openwrt](https://github.com/ophub/amlogic-s9xxx-openwrt) · [ophub/kernel](https://github.com/ophub/kernel) · [daeuniverse/honk](https://github.com/daeuniverse/honk) · [daeuniverse/openwrt-packages](https://github.com/daeuniverse/openwrt-packages) · [luci-app-podman](https://github.com/Zerogiven-OpenWRT-Packages/luci-app-podman)
+[ImmortalWrt](https://github.com/immortalwrt/immortalwrt) · [ophub/amlogic-s9xxx-openwrt](https://github.com/ophub/amlogic-s9xxx-openwrt) · [ophub/kernel](https://github.com/ophub/kernel) · [daeuniverse/honk](https://github.com/daeuniverse/honk) · [daeuniverse/openwrt-packages](https://github.com/daeuniverse/openwrt-packages) · [luci-app-podman](https://github.com/Zerogiven-OpenWRT-Packages/luci-app-podman) · [luci-theme-vantage](https://github.com/anothaDev/luci-theme-vantage)
